@@ -1,0 +1,101 @@
+library(devtools)
+install_github("SLisovski/GeoLocTools")
+library(GeoLocTools)
+setupGeolocation()
+library(maps)
+library(mapplots)
+library(GISTools)
+library(mapview)
+
+plot_lon_lat(Result)
+
+Summary006<-stationary.migration.summary(Result006, prob.cutoff = 0.1)
+
+# Now we want to plot the detected stationary periods on a map
+Summary006$Stationary.periods$stopover_duration<-as.numeric(difftime(Summary006$Stationary.periods$Departure.Q.50,Summary006$Stationary.periods$Arrival.Q.50, units='days'))
+# Now I want to select the periods which were >=2 days and 
+Main_stopovers<-Summary006$Stationary.periods[is.na(Summary006$Stationary.periods$stopover_duration) | Summary006$Stationary.periods$stopover_duration>=2,]
+# delete breeding season
+Main_stopovers<-Main_stopovers[-which(is.na(Main_stopovers$stopover_duration)),]
+
+Coords2plot<-cbind(Result006$Results$Quantiles$Medianlat, Result006$Results$Quantiles$Medianlon)
+
+for (i in 1:nrow(Summary006$Potential_stat_periods)) {
+        Coords2plot[Summary006$Potential_stat_periods[i,1]:
+                            Summary006$Potential_stat_periods[i,2],1] =  
+                Summary006$Stationary.periods$Medianlat[i]
+        
+        Coords2plot[Summary006$Potential_stat_periods[i,1]:
+                            Summary006$Potential_stat_periods[i,2],2] =  
+                Summary006$Stationary.periods$Medianlon[i]
+}
+Coords2plot<-Coords2plot[!duplicated(Coords2plot),]
+#za 548 izbacit gniježđenje
+#Coords2plot<-Coords2plot[-c(1:14, 85:101),]
+#Main_stopovers<-Main_stopovers[-c(1:2, 10:11), ]
+#555
+#Coords2plot<-Coords2plot[-c(1:18, 113:132),]
+#Main_stopovers<-Main_stopovers[-c(1:3, 9:10),]
+#001
+#Coords2plot<-Coords2plot[-c(1:5),]
+#Main_stopovers<-Main_stopovers[-1,]
+
+pdf('006_migration_with_stopovers.pdf')
+par(mar=c(0,0,0,0))
+maps::map('world', ylim=c(-35, 55), xlim=c(-30, 65), col=grey(0.7),
+    fill=TRUE, border=grey(0.9), mar=rep(0.5, 4), myborder=0)
+
+lines(Coords2plot[,1]~Coords2plot[,2], col='red', lwd=2)
+points(Coords2plot[,1]~Coords2plot[,2], ,lwd=2, col='red', pch=19)
+
+# Here we assign the colours to represent time of the year
+Seasonal_palette<-grDevices::colorRampPalette(grDevices::hsv(1-((1:365)+(365/4))%%365/365,
+                                                             s=0.8, v=0.8), space="Lab")
+Seasonal_colors<-Seasonal_palette(12)
+
+Main_stopovers$Main_month<-as.numeric(format(Main_stopovers$Arrival.Q.50+
+                                                     Main_stopovers$stopover_duration/2, format='%m'))
+
+points(Main_stopovers$Medianlat~Main_stopovers$Medianlon, pch=21, 
+       cex=log(as.numeric(Main_stopovers$stopover_duration)),
+       bg=Seasonal_colors[Main_stopovers$Main_month])
+
+# Now, for each of these points we plot the uncertainties
+# Horizontal
+segments(y0=Main_stopovers$Medianlat, x0=Main_stopovers$FstQu.lon,
+         x1=Main_stopovers$TrdQu.lon, lwd=2)
+# Vertical
+segments(x0=Main_stopovers$Medianlon, y0=Main_stopovers$FstQu.lat,
+         y1=Main_stopovers$TrdQu.lat, lwd=2)
+
+# and we also need to add breeding site here:
+#naši
+#points(x=16.18, y=45.75, cex=6, pch=21 , bg=Seasonal_colors[5])
+
+#mađari
+points(x=18.16, y=47.18, cex=6, pch=21 , bg=Seasonal_colors[5])
+
+## postavljanje legende boja, sjevera i 
+##samo za računanje smještaja ostalih stvari 
+#library(mapproj)
+#map.grid(lim=c(-30, 65, -35, 55)) 
+maps::map.scale(x=37, y=-28, ratio=FALSE, relwidth=0.2)
+GISTools::north.arrow(xb=55, yb=-15, len=1, lab="N") 
+mapplots::add.pie(z=c(1/12, 1/12, 1/12, 1/12, 1/12, 1/12, 1/12, 1/12, 1/12, 1/12, 1/12, 1/12), x=-5, y=-20, radius = 10, 
+        labels = c(1:12), clockwise = TRUE, init.angle = 90, col=Seasonal_colors)
+graphics::text(x=-5, y=-5, labels = "Month")
+#za 006
+text(Main_stopovers$Medianlon, y = Main_stopovers$Medianlat, c(" 110", 2), pos = 4)
+text(x=18.16, y=47.18, "Mk006")
+#za 001
+#text(Main_stopovers$Medianlon, y = Main_stopovers$Medianlat, c(" 47", 4, 10, 6, 3), pos = 4)
+#text(x=18.16, y=47.18, "Mk001")
+#za 555
+#text(Main_stopovers$Medianlon, y = Main_stopovers$Medianlat, c(" 76", 8, " 112", 14, 4), pos = 4)
+#text(x=16.18, y=45.75, "Z555")
+#za 548
+#text(Main_stopovers$Medianlon, y = Main_stopovers$Medianlat, c(" 76", 11, " 122", 12, " 20", 4, 4), pos = 4)
+#text(x=16.18, y=45.75, "Z548")
+
+#ugasit sliku
+dev.off()
